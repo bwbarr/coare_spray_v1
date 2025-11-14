@@ -186,7 +186,7 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
 
     # 3. Enter loop that iterates on L and heat fluxes ====================================================
     # Spray contributes to thvstar, so both interfacial and spray heat fluxes are calculated within loop.
-    nits = 2#10    # Number of iterations for stability.  COARE 3.6 default is 10.
+    nits = 10    # Number of iterations for stability.  COARE 3.6 default is 10.
     for n in range(nits):
 
         print('Bulk iteration number: ' + str(n))
