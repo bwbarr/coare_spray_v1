@@ -300,7 +300,7 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
         v_g = fall_velocity_PK97(r0)    # Droplet settling velocity [m s-1]
         tauf = np.array([delspr/v_g[i] for i in r0_rng])    # Characteristic droplet settling time [s]
         Fp = np.array([1.+0.25*(2.*v_g[i]*r0[i]/nu_a)**0.5 for i in r0_rng])    # Slip factor (Pr&Kl) [-]
-        nospray = np.isnan(eps)    # No spray (e.g. over land) where there is no wave data
+        nospray = np.logical_or(np.isnan(eps),np.isnan(U_10))    # No spray (e.g. over land) where there is no wave data
         zerospray = np.logical_and(~nospray,U_10 < sprayLB)    # Assume spray heat fluxes are zero below lower bound
         # Heat flux due to temperature change
         tauT = np.array([np.where(np.logical_or(nospray,zerospray),np.nan,\
