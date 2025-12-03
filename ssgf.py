@@ -42,9 +42,9 @@ def ssgf_dissejec_BCF23(SSGFname,eps,swh,dcp_in,mss_in,ustar,z0,L,gf,r0=None,del
     elif SSGFname in ['dissejec_SS_BEA26_Cntl','dissejec_Wi_BEA26_Cntl']:
         model_coeffs = [2.2,0.969,0.1116            ,0.719,2.17,0.852]
     elif SSGFname in ['dissejec_SS_BEA26_C3.6','dissejec_Wi_BEA26_C3.6']:
-        model_coeffs = [2.2,0.969,0.07              ,0.719,2.17,0.852]    # C2 will change with C3.6 tuning
+        model_coeffs = [2.2,0.969,0.0759            ,0.719,2.17,0.852]    # To be finalized
     elif SSGFname in ['dissejec_SS_BEA26_C4.X','dissejec_Wi_BEA26_C4.X']:
-        model_coeffs = [2.2,0.969,0.15              ,0.719,2.17,0.852]    # C2 will change with C4.X tuning
+        model_coeffs = [2.2,0.969,0.120             ,0.719,2.17,0.852]    # To be finalized
     elif SSGFname in ['dissejec_Wi_BEA26_C3.6optim','dissejec_Wi_BEA26_C4.Xoptim']:
         model_coeffs = [2.2,0.969,extravars['C2_DE'],0.719,2.17,0.852]    # C2 comes from input for optimization
 

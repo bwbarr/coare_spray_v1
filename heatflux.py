@@ -206,8 +206,8 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
             z0q = np.minimum(1.0e-4,np.minimum(7.5e-5/Restar**0.5,6.0e-4/Restar**1.2))
         elif which_z0tq in ['C4.X','C4.Xoptim']:    # COARE 4.X
             if which_z0tq == 'C4.X':
-                A_C4X = 1.8e-3
-                B_C4X = -1.5
+                A_C4X = 3.05e-4    # To be finalized
+                B_C4X = -1.05    # To be finalized
             elif which_z0tq == 'C4.Xoptim':
                 A_C4X = extravars['A_C4.X']
                 B_C4X = extravars['B_C4.X']
