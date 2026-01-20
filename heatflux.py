@@ -38,32 +38,34 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
         SSGFname - name of SSGF to use.  Options are:
             Dissipation-ejection based: 
                 'dissejec_SS_BCF23' - Uses original BCF23 spray model coefficients
-                    (with calibration bug), i.e., fs = 2.2, C1 = 1.35, C2 = 0.1116, which 
-                    reproduces the published BCF23 results.  This does not match the 
-                    (corrected) F94+MOM80+fs0.4+30m/s datum.  Parameterized by seastate.
+                    (with calibration bug), i.e., [fs,C1,C2,C3,C4,C5] = 
+                    [2.2,1.35,0.1116,0.719,2.17,0.852], which reproduce the published BCF23
+                    results.  This does not match the (corrected) F94+MOM80+fs0.4+30m/s datum.
+                    Parameterized by seastate.
                 'dissejec_Wi_BCF23' - Same as above, except parameterized by winds 
-                    using wave approximations per BEA26.
+                    using wave approximations of BEA26.
                 'dissejec_SS_C3.6_CtlSpr' - Uses C3.6_CtlSpr model coefficients from BEA26, 
-                    i.e., fs = 2.2, C1 = 0.969, C2 = 0.1116, which corrects the 
-                    calibration bug, causing lower spray production than in the 
+                    i.e., [fs,C1,C2,C3,C4,C5] = [2.2,0.969,0.1116,0.719,2.17,0.852], which 
+                    corrects the calibration bug, causing lower spray production than in the 
                     published BCF23.  Matches the F94+MOM80+fs0.4+30m/s datum.
                     Parameterized by seastate.
                 'dissejec_Wi_C3.6_CtlSpr' - Same as above, except parameterized by winds.
                 'dissejec_SS_C3.6_OptSpr' - Uses C3.6_OptSpr model coefficients from BEA26,
-                    i.e., fs = 2.2, C1 = 0.969, C2 = 0.0759, which are optimized for use 
-                    with COARE 3.6 scalar roughness lengths.  Matches the F94+MOM80+fs0.4+30m/s 
-                    datum.  Parameterized by seastate.
+                    i.e., [fs,C1,C2,C3,C4,C5] = [2.2,0.969,0.0759,0.719,2.17,0.852], which
+                    are optimized for use with COARE 3.6 scalar roughness lengths.  Matches 
+                    the F94+MOM80+fs0.4+30m/s datum.  Parameterized by seastate.
                 'dissejec_Wi_C3.6_OptSpr' - Same as above, except parameterized by winds.
                 'dissejec_SS_BEA26_OptSpr' - Uses BEA26_OptSpr model coefficients from BEA26,
-                    i.e., fs = 2.2, C1 = 0.969, C2 = 0.120, which are optimized for use 
-                    with BEA26 scalar roughness lengths.  Matches the F94+MOM80+fs0.4+30m/s 
-                    datum.  Parameterized by seastate.
+                    i.e., [fs,C1,C2,C3,C4,C5] = [2.2,0.969,0.120,0.719,2.17,0.852], which 
+                    are optimized for use with BEA26 scalar roughness lengths.  Matches the 
+                    F94+MOM80+fs0.4+30m/s datum.  Parameterized by seastate.
                 'dissejec_Wi_BEA26_OptSpr' - Same as above, except parameterized by winds.
-                'dissejec_Wi_C2optimize' - Uses fs = 2.2, C1 = 0.969, and user-defined C2.
+                'dissejec_Wi_C2optimize' - Uses [fs,C1,C2,C3,C4,C5] = 
+                    [2.2,0.969,[INPUT],0.719,2.17,0.852], i.e., C2 is user-defined.
                     This version is used for optimization in BEA26.
             Whitecap based:
                 'whitecap_Wi_MOM80' - parameterized by winds, using F94 size
-                    distribution with MOM80 whitecap fraction.  The spray mass
+                    distribution with MOM80 whitecap fraction and fs = 0.4.  The spray mass
                     flux from this model at U10 = 30 m/s with fs = 0.4 is currently
                     the datum for all other options.  The datum was calculated 
                     incorrectly in BCF23, leading to the 'published' vs 'fixed'
