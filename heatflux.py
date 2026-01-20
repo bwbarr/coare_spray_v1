@@ -1,15 +1,15 @@
 import numpy as np
 from scipy.optimize import fsolve
-from .ssgf import ssgf_dissejec_BCF23,ssgf_whitecap_F94
+from .ssgf import ssgf_dissejec,ssgf_whitecap
 from .util import charnock,fall_velocity_PK97,qsat0,satratio,stabIntH,stabIntM,stabIntSprayH,\
         thermo_HRspr,thermo_HTspr,tq_zR_fsolve_residual,swh_WEA17_Hack
 
 def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=None,SSGFname='dissejec_SS_BCF23',param_delspr_Wi=False,feedback=True,getprofiles=False,zRvaries=False,sprayLB=10.0,fdbksolve='iterIG',scaleSSGF=False,chi1=None,chi2=None,which_stress='C3.6_Wi',ustar_bulk_in=None,use_gf=True,which_z0tq='C3.6',z_ref=-1,print_counter=True,extravars=None):
     """
     Surface layer model for air-sea heat fluxes with spray.  Uses COARE framework for bulk 
-    momentum and heat fluxes and uses BCF model to incorporate spray.  Set up to make 
-    calculations using model output or in situ surface observations.  The model allows spray
-    heat fluxes to feed back on bulk heat fluxes through both subgrid changes to the 
+    momentum and heat fluxes and uses Barr et al. (2023; BCF23) model to incorporate spray.  
+    Can make calculations using model output or in situ surface observations.  The algorithm
+    allows spray heat fluxes to feed back onto bulk heat fluxes through both subgrid changes to the 
     spray layer temp/humidity profiles (the gamma feedback factors) and through changes to the 
     Obukhov stability length L.  The spray heat fluxes themselves also receive feedback from changes
     to the spray layer temp/humidity profiles and changes to L.    
@@ -25,14 +25,14 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
         z_u - height of given wind value [m].  This is the lowest atmospheric model mass level 
             (equal to z_1) if using model output, and it is the height of wind measurements 
             (probably not equal to z_1) if using observations.
-        U_u - windspeed magnitude at z_u [m s-1].  Note that all windspeeds are current-relative.
+        U_u - windspeed magnitude at z_u [m s-1].  Windspeeds should be provided as current-relative.
         p_0 - surface pressure [Pa]
         t_0 - sea surface temperature [K]
         eps - wave energy dissipation flux [W m-2]
         dcp - dominant phase speed [m s-1]
         swh - significant wave height [m]
         mss - mean squared waveslope [-]
-        fs - scale factor on droplet SSGF [-] ------- remove?
+        fs - scale factor on droplet SSGF [-] --> NOT USED IN CODE, TO BE REMOVED
         r0 - SSGF radius vector [m]
         delta_r0 - SSGF bin width [m]
         SSGFname - name of SSGF to use.  Options are:
@@ -40,47 +40,42 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
                 'dissejec_SS_BCF23' - Uses original BCF23 spray model coefficients
                     (with calibration bug), i.e., fs = 2.2, C1 = 1.35, C2 = 0.1116, which 
                     reproduces the published BCF23 results.  This does not match the 
-                    (corrected) F94+MOM80+fs0.4+30m/s datum.  Parameterized by seastate 
-                    according to BCF23.
+                    (corrected) F94+MOM80+fs0.4+30m/s datum.  Parameterized by seastate.
                 'dissejec_Wi_BCF23' - Same as above, except parameterized by winds 
-                    per BEA26.
-                'dissejec_SS_BEA26_Cntl' - Uses BEA26 Control spray model coefficients, 
+                    using wave approximations per BEA26.
+                'dissejec_SS_C3.6_CtlSpr' - Uses C3.6_CtlSpr model coefficients from BEA26, 
                     i.e., fs = 2.2, C1 = 0.969, C2 = 0.1116, which corrects the 
                     calibration bug, causing lower spray production than in the 
                     published BCF23.  Matches the F94+MOM80+fs0.4+30m/s datum.
-                    Parameterized by seastate according to BCF23.
-                'dissejec_Wi_BEA26_Cntl' - Same as above, except parameterized by winds
-                    per BEA26.
-                'dissejec_SS_BEA26_C3.6' - Uses BEA26 C3.6 Calibration spray model
-                    coefficients, i.e., fs = 2.2, C1 = 0.969, C2 = 0.07, which are
-                    optimized for use with COARE 3.6 scalar roughness lengths.  
-                    Matches the F94+MOM80+fs0.4+30m/s datum.  Parameterized by 
-                    seastate according to BCF23.
-                'dissejec_Wi_BEA26_C3.6' - Same as above, except parameterized by winds
-                    per BEA26.  (Also 'dissejec_Wi_BEA26_C3.6optim' for optimization work.)
-                'dissejec_SS_BEA26_C4.X' - Uses BEA26 C4.X Calibration spray model
-                    coefficients, i.e., fs = 2.2, C1 = 0.969, C2 = 0.15, which are
-                    optimized for use with COARE 4.X scalar roughness lengths.
-                    Matches the F94+MOM80+fs0.4+30m/s datum.  Parameterized by 
-                    seastate according to BCF23.
-                'dissejec_Wi_BEA26_C4.X' - Same as above, except parameterized by winds
-                    per BEA26.  (Also 'dissejec_Wi_BEA26_C4.Xoptim' for optimization work.)
+                    Parameterized by seastate.
+                'dissejec_Wi_C3.6_CtlSpr' - Same as above, except parameterized by winds.
+                'dissejec_SS_C3.6_OptSpr' - Uses C3.6_OptSpr model coefficients from BEA26,
+                    i.e., fs = 2.2, C1 = 0.969, C2 = 0.0759, which are optimized for use 
+                    with COARE 3.6 scalar roughness lengths.  Matches the F94+MOM80+fs0.4+30m/s 
+                    datum.  Parameterized by seastate.
+                'dissejec_Wi_C3.6_OptSpr' - Same as above, except parameterized by winds.
+                'dissejec_SS_BEA26_OptSpr' - Uses BEA26_OptSpr model coefficients from BEA26,
+                    i.e., fs = 2.2, C1 = 0.969, C2 = 0.120, which are optimized for use 
+                    with BEA26 scalar roughness lengths.  Matches the F94+MOM80+fs0.4+30m/s 
+                    datum.  Parameterized by seastate.
+                'dissejec_Wi_BEA26_OptSpr' - Same as above, except parameterized by winds.
+                'dissejec_Wi_C2optimize' - Uses fs = 2.2, C1 = 0.969, and user-defined C2.
+                    This version is used for optimization in BEA26.
             Whitecap based:
-                'whitecap_Wi_F94_MOM80' - parameterized by winds, using F94 size
+                'whitecap_Wi_MOM80' - parameterized by winds, using F94 size
                     distribution with MOM80 whitecap fraction.  The spray mass
                     flux from this model at U10 = 30 m/s with fs = 0.4 is currently
                     the datum for all other options.  The datum was calculated 
                     incorrectly in BCF23, leading to the 'published' vs 'fixed'
-                    versions for some SSGFs.
-                'whitecap_Wi_F94_BCF23_published' - parameterized by winds, using
+                    versions of 'whitecap_Wi_BCF23'.
+                'whitecap_Wi_BCF23_published' - parameterized by winds, using
                     F94 size distribution with BCF23 wind-based whitecap fraction.
                     Uses fs = 3.1, which does not match the F94+MOM80+fs0.4+30m/s
                     datum but reproduces the (incorrect) published BCF23 results.
-                'whitecap_Wi_F94_BCF23_fixed' - parameterized by winds, using 
+                'whitecap_Wi_BCF23_fixed' - parameterized by winds, using 
                     F94 size distribution with BCF23 wind-based whitecap fraction.
                     Uses fs = 2.2, which gives lower spray generation than the 
-                    published BCF23 results, but matches the F94+MOM80+fs0.4+30m/s
-                    datum.
+                    published BCF23 results, but matches the F94+MOM80+fs0.4+30m/s datum.
         param_delspr_Wi - True to parameterize spray layer thickness from winds, False to use input swh.
         feedback - True to include subgrid-scale spray feedback -- Recommended
         getprofiles - True to calculate and output vertical thermodynamic profiles within surface layer
@@ -92,9 +87,9 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
                 tends to blow up in shallow water with large spray generation
             'iterIG' - solves feedback using initial guess physics with one iteration, this option
                 is fast and usually gives good results, so it is the recommended option.
-        scaleSSGF - True to scale SSGF to favor large or small droplets using chi1 and chi2 (rarely used)
-        chi1 - factor scaling small droplet end of SSGF
-        chi2 - factor scaling large droplet end of SSGF
+        scaleSSGF - True to scale SSGF to favor large or small droplets using chi1 and chi2 --> NOT USED IN CODE, TO BE REMOVED
+        chi1 - factor scaling small droplet end of SSGF --> NOT USED IN CODE, TO BE REMOVED
+        chi2 - factor scaling large droplet end of SSGF --> NOT USED IN CODE, TO BE REMOVED
         which_stress - how to calculate stress.  Options are:
             'C3.6_Wi' - COARE 3.6 algorithm, wind-dependent charnock parameter
             'C3.6_SS' - COARE 3.6 algorithm, seastate-dependent charnock parameter
@@ -103,12 +98,11 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
         ustar_bulk_in - if using which_stress option 'ustar_bulk_given', this is the input bulk ustar.  If 
             parameterizing stress internally (using COARE), set this to None.
         use_gf - True to use gust factor physics, False to set gf to 1.0.
-        which_z0tq - how to calculate scalar roughness lengths:
-            'C3.6' for COARE 3.6,
-            'C4.0' for COARE 4.0,
-            'C4.X' for COARE 4.X (also 'C4.Xoptim' for optimization work),
-            'Hyp' for test hyperbola (in development, probably will remove),
-            'ReyAn' for Reynolds analogy scaling (in development)
+        which_z0tq - how to calculate scalar roughness lengths.  Options are:
+            'C3.6' - COARE 3.6 algorithm
+            'BEA26' - BEA26 scalar roughness model
+            'BEA26_optimize' - user-specified A and B in BEA26 model, used for optimization
+            'C4.0' - upcoming COARE 4.0 algorithm
         z_ref - reference height for calculating spray changes to subgrid surface layer temperature,
             specific humidity, and saturation ratio [m].  z_ref should not be larger than z_1.  Pass
             z_ref = -1 to calculate changes at mid-spray-layer height.
@@ -193,48 +187,30 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
 
         # 4. Calculate L, roughness lengths, and turbulent scales without spray ====================================
         L = ustar**2/(kappa*g/thv_1*thvstar)
+        # Calculate momentum roughness length
         if which_stress in ['C3.6_Wi','C3.6_SS']:    # Parameterize z0 using COARE
             z0 = 0.11*nu_a/ustar + alpha_char*ustar**2/g    # [m]
         elif which_stress in ['ustar_bulk_given']:    # Invert z0 using given stress
             z0 = z_u/np.exp(S_u*kappa/ustar + stabIntM(z_u/L))    # [m]
+        # Calculate scalar roughness lengths
         Restar = ustar*z0/nu_a    # Roughness Reynolds number [-]
         if which_z0tq == 'C3.6':    # Close approximation to COARE 3.0
             z0q = np.minimum(1.6e-4,5.8e-5/Restar**0.72)    # [m]
             z0t = np.copy(z0q)    # [m]
+        elif which_z0tq in ['BEA26','BEA26_optimize']:    # BEA26 scalar roughness model
+            if which_z0tq == 'BEA26':
+                A_BEA26 = 3.05e-4    # To be finalized
+                B_BEA26 = -1.05    # To be finalized
+            elif which_z0tq == 'BEA26_optimize':
+                A_BEA26 = extravars['A_BEA26']
+                B_BEA26 = extravars['B_BEA26']
+            z0q = np.minimum(1.0e-4,np.minimum(7.5e-5/Restar**0.5,A_BEA26*Restar**B_BEA26))    # Same as C4.0 but last term is changed
+            z0tDz0q_G92_smooth = np.exp(13.6*kappa*(Sc**(2/3) - Pr**(2/3)))    # Ratio z0t/z0q [-], Garratt 1992, smooth
+            z0t = z0q*z0tDz0q_G92_smooth    # [m]
         elif which_z0tq == 'C4.0':    # Jim's latest COARE 4.0
             z0t = np.minimum(5.5e-5,np.minimum(7.0e-5/Restar**0.7,3.0e-2/Restar**2.4))
             z0q = np.minimum(1.0e-4,np.minimum(7.5e-5/Restar**0.5,6.0e-4/Restar**1.2))
-        elif which_z0tq in ['C4.X','C4.Xoptim']:    # COARE 4.X
-            if which_z0tq == 'C4.X':
-                A_C4X = 3.05e-4    # To be finalized
-                B_C4X = -1.05    # To be finalized
-            elif which_z0tq == 'C4.Xoptim':
-                A_C4X = extravars['A_C4.X']
-                B_C4X = extravars['B_C4.X']
-            z0q = np.minimum(1.0e-4,np.minimum(7.5e-5/Restar**0.5,A_C4X*Restar**B_C4X))    # Same as C4.0 but last term is changed
-            z0tz0q_G92_smooth = np.exp(13.6*kappa*(Sc**(2/3) - Pr**(2/3)))    # Ratio z0t/z0q [-], Garratt 1992, smooth
-            z0t = z0q*z0tz0q_G92_smooth    # [m]
-        elif which_z0tq == 'Hyp':    # Form of hyperbola, in development
-            a_HYP = 2
-            b_HYP = 1
-            c_HYP = 8
-            x0_HYP = -1
-            y0_HYP = -2
-            ex_HYP = 4
-            z0q = 10**(y0_HYP - (a_HYP*((np.log10(Restar) - x0_HYP)**ex_HYP/b_HYP + c_HYP))**(1/ex_HYP))    # [m]
-            z0q[Restar < 1e-1] = 1e-4
-            z0t = np.copy(z0q)    # [m]
-        elif which_z0tq == 'ReyAn':    # New Reynolds analogy scaling
-            lnz0z0t_G92_smooth = kappa*(13.6*Pr**(2/3) - 12)    # Roughness ratio for heat, Garratt 1992, smooth
-            lnz0z0q_G92_smooth = kappa*(13.6*Sc**(2/3) - 12)    # Roughness ratio for moisture, Garratt 1992, smooth
-            z0tz0_smooth = 1/np.exp(lnz0z0t_G92_smooth)    # z0t/z0 per G92 in smooth wall limit [-]
-            z0qz0_smooth = 1/np.exp(lnz0z0q_G92_smooth)    # z0q/z0 per G92 in smooth wall limit [-]
-            z0_smooth = 0.11*nu_a/ustar    # Momentum roughness length for turbulent flow over a smooth wall [m]
-            g1 = z0_smooth*(1 + (ustar/9e-2)**5)**0.5    # Smooth flow limit with transition [m]
-            g2 =    4.0e-5/(1 + (ustar/4e-1)**5.2)    # Rough flow plateau and dropoff [m]
-            z0_int_RA = np.where(ustar < 1e-1,g1,np.minimum(g1,g2))    # Reynolds analogy parameterization for interfacial z0 [m]
-            z0t = z0_int_RA*z0tz0_smooth    # [m]
-            z0q = z0_int_RA*z0qz0_smooth    # [m]
+        # Calculate turbulent flux scales without spray
         if which_stress in ['C3.6_Wi','C3.6_SS']:    # Update ustar using new z0, L, and S_u
             ustar = S_u*kappa/(np.log(z_u/z0) - stabIntM(z_u/L))
         elif which_stress in ['ustar_bulk_given']:    # Update ustar using new gf with input value of ustar_bulk_in
@@ -283,19 +259,16 @@ def sprayHFs(z_1,t_1,q_1,z_u,U_u,p_0,t_0,eps,dcp,swh,mss,fs,r0=None,delta_r0=Non
 
         # 6. Calculate fields for spray heat fluxes that are not affected by subgrid feedback ====================
         # SSGF and droplet hydrodynamics
-        if SSGFname in ['dissejec_SS_BCF23'     ,'dissejec_Wi_BCF23'     ,\
-                        'dissejec_SS_BEA26_Cntl','dissejec_Wi_BEA26_Cntl',\
-                        'dissejec_SS_BEA26_C3.6','dissejec_Wi_BEA26_C3.6','dissejec_Wi_BEA26_C3.6optim',\
-                        'dissejec_SS_BEA26_C4.X','dissejec_Wi_BEA26_C4.X','dissejec_Wi_BEA26_C4.Xoptim']:    # Dissipation-ejection based models
-            r0,delta_r0,M_spr,dmdr0 = ssgf_dissejec_BCF23(SSGFname,eps,swh,dcp,mss,ustar,z0,L,gf,\
+        if SSGFname in ['dissejec_SS_BCF23'       ,'dissejec_Wi_BCF23'       ,\
+                        'dissejec_SS_C3.6_CtlSpr' ,'dissejec_Wi_C3.6_CtlSpr' ,\
+                        'dissejec_SS_C3.6_OptSpr' ,'dissejec_Wi_C3.6_OptSpr' ,\
+                        'dissejec_SS_BEA26_OptSpr','dissejec_Wi_BEA26_OptSpr',\
+                        'dissejec_Wi_C2optimize']:    # Dissipation-ejection based models
+            r0,delta_r0,M_spr,dmdr0 = ssgf_dissejec(SSGFname,eps,swh,dcp,mss,ustar,z0,L,gf,\
                     r0=r0,delta_r0=delta_r0,extravars=extravars)    # [m],[m],[kg m-2 s-1],[kg m-2 s-1 m-1]
-            if scaleSSGF:    # Scale SSGF to favor large or small droplets
-                r0,delta_r0,M_spr_scale,dmdr0_scale = ssgf_dissejec_BCF23(SSGFname,eps,swh,dcp,mss,ustar,z0,L,gf,\
-                        r0=r0,delta_r0=delta_r0,chi1=chi1,chi2=chi2,extravars=extravars)
-                dmdr0 = dmdr0_scale*M_spr/M_spr_scale    # Normalize dmdr0_scale to have same integrated mass flux as dmdr0
-        elif SSGFname in ['whitecap_Wi_F94_MOM80','whitecap_Wi_F94_BCF23_published',\
-                          'whitecap_Wi_F94_BCF23_fixed']:    # Whitecap based models
-            r0,delta_r0,M_spr,dmdr0 = ssgf_whitecap_F94(SSGFname,U_10,r0=r0,delta_r0=delta_r0)    # [m],[m],[kg m-2 s-1],[kg m-2 s-1 m-1]
+        elif SSGFname in ['whitecap_Wi_MOM80','whitecap_Wi_BCF23_published',\
+                          'whitecap_Wi_BCF23_fixed']:    # Whitecap based models
+            r0,delta_r0,M_spr,dmdr0 = ssgf_whitecap(SSGFname,U_10,r0=r0,delta_r0=delta_r0)    # [m],[m],[kg m-2 s-1],[kg m-2 s-1 m-1]
         r0_rng = np.arange(np.size(r0))    # List to use for stepping through r0
         v_g = fall_velocity_PK97(r0)    # Droplet settling velocity [m s-1]
         tauf = np.array([delspr/v_g[i] for i in r0_rng])    # Characteristic droplet settling time [s]
